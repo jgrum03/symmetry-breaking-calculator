@@ -5,14 +5,21 @@ The document [adjointCentralizerCalculator.g](adjointCentralizerCalculator.g) ca
 
 The document [centralizerCaluclator.g](centralizerCalculator.g) was my original first attempt. With that document, you can choose any representation, not just the adjoint, and it will spit out what it breaks to.
 
-## Instructions To Use [adjointCentralizerCalculator.g](adjointCentralizerCalculator.g):
+## Instructions to Use
+Make sure GAP is installed. Once GAP is installed you should be able to type `gap` into your terminal. This should bring up a line in the terminal which looks like
+```
+gap> 
+```
+Type `Read("adjointCentralizerCalculator.g")` or `Read("centralizerCalculator.g")` to run the corresponding code. I currently don't have options to choose when running this code -- that may be a future addition -- but for now the only way to change how the code runs is by changing the code directly.
+
+### Instructions To Use [adjointCentralizerCalculator.g](adjointCentralizerCalculator.g):
 At the top of the doc, there is a variable titled `algebra`, in a line of the form
 ```
 algebra := ["A",2];;
 ```
 Simply change this list to whatever algebra you would like, and it will start spitting out all possible breaking patterns.
 
-## Instructions To Use [centralizerCalculator.g](centralizerCalculator.g):
+### Instructions To Use [centralizerCalculator.g](centralizerCalculator.g):
 At the top of the doc, there is a block of code which looks like
 ```
 algebra := ["A", 2];;
