@@ -1,6 +1,12 @@
 LoadPackage("sla");
 
-algebra := ["D", 5];;
+algebra := ["C", 3];;
+
+g := SimpleLieAlgebra(algebra[1], algebra[2], Rationals);;
+bg := Basis(g);;
+
+oplusCharacter := Encode(Unicode("&#x2295;", "XML"));;
+timesCharacter := Encode(Unicode("&#x00D7;", "XML"));;
 
 if algebra[1] = "A" then
     rep := List([1..algebra[2]], i -> 0);;;
@@ -22,6 +28,14 @@ elif algebra = ["E",7] then
 elif algebra = ["E",8] then
     rep := [1,0,0,0,0,0,0,0];;
 fi;
+
+branchCatch := function(g, K, rep)
+local result;
+    BreakOnError := false;
+    result := CALL_WITH_CATCH(Branching, [ g, K, rep ])[1];;
+    BreakOnError := true;
+    return result;
+end;
 
 StabilizerAlgebra := function(v, g)
   local basis, m, sol, stab;
@@ -53,20 +67,23 @@ AnalyzeStabilizer := function(v, g)
         for i in [1..Length(ss)] do
             K := ss[i];
             Print(i, ":\nSubalgebra type: ", SemiSimpleType(K), "\n");
-            branch := Branching(g, K, rep);;
-            if SemiSimpleType(K) = "A1" then
-                repDimensions := branch[1]+1;
-                mult := branch[2];
-                Print("su(2) Rep: ", repDimensions[1][1], "^",mult[1]);
-                for j in [2..Length(repDimensions)] do
-                    Print(oplusCharacter, repDimensions[j][1], "^", mult[j]);
-                od;
-            else
-                Print("Highest weights: ");
-                Print(branch[2][1], timesCharacter, branch[1][1]);
-                for j in [2..Length(branch[1])] do
-                    Print(oplusCharacter, branch[2][j], timesCharacter, branch[1][j]);
-                od;
+            # Print(K, "\n");
+            if branchCatch(g, K, rep) then
+                branch := Branching(g, K, rep);
+                if SemiSimpleType(K) = "A1" then
+                    repDimensions := branch[1]+1;
+                    mult := branch[2];
+                    Print("su(2) Rep: ", repDimensions[1][1], "^",mult[1]);
+                    for j in [2..Length(repDimensions)] do
+                        Print(oplusCharacter, repDimensions[j][1], "^", mult[j]);
+                    od;
+                else
+                    Print("Highest weights: ");
+                    Print(branch[2][1], timesCharacter, branch[1][1]);
+                    for j in [2..Length(branch[1])] do
+                        Print(oplusCharacter, branch[2][j], timesCharacter, branch[1][j]);
+                    od;
+                fi;
             fi;
             Print("\n\n==============================\n\n");
         od;
