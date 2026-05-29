@@ -23,20 +23,6 @@ elif algebra = ["E",8] then
     rep := [1,0,0,0,0,0,0,0];;
 fi;
 
-g := SimpleLieAlgebra(algebra[1], algebra[2], Rationals);;
-bg := Basis(g);;
-
-oplusCharacter := Encode(Unicode("&#x2295;", "XML"));;
-timesCharacter := Encode(Unicode("&#x00D7;", "XML"));;
-
-orbs := NilpotentOrbits(g);;
-for o in orbs do
-    stabilizedVector := SL2Triple(o)[3];;
-    Print("Stabilizer of ", stabilizedVector, ":\n");;
-    AnalyzeStabilizer(stabilizedVector, g);;
-    Print("\n");;
-od;;
-
 StabilizerAlgebra := function(v, g)
   local basis, m, sol, stab;
 
@@ -52,7 +38,7 @@ StabilizerAlgebra := function(v, g)
 end;;
 
 AnalyzeStabilizer := function(v, g)
-    local stab, levi, ideals, ss, branch, repDimensions, mult;
+    local stab, levi, ideals, ss, branch, repDimensions, mult, i, K, j;
     stab := StabilizerAlgebra(v, g);;
 
     levi := LeviMalcevDecomposition(stab)[1];;
@@ -86,3 +72,17 @@ AnalyzeStabilizer := function(v, g)
         od;
     fi;;
 end;;
+
+g := SimpleLieAlgebra(algebra[1], algebra[2], Rationals);;
+bg := Basis(g);;
+
+oplusCharacter := Encode(Unicode("&#x2295;", "XML"));;
+timesCharacter := Encode(Unicode("&#x00D7;", "XML"));;
+
+orbs := NilpotentOrbits(g);;
+for o in orbs do
+    stabilizedVector := SL2Triple(o)[3];;
+    Print("Stabilizer of ", stabilizedVector, ":\n");;
+    AnalyzeStabilizer(stabilizedVector, g);;
+    Print("\n");;
+od;;
