@@ -2,7 +2,6 @@ LoadPackage("sla");
 
 algebra := ["D", 5];;
 
-# stabilizedVectorLabel := [0,0,0,0,0,0,1,-1];;
 if algebra[1] = "A" then
     rep := List([1..algebra[2]], i -> 0);;;
     rep[1]:=1;;
@@ -29,8 +28,6 @@ bg := Basis(g);;
 
 oplusCharacter := Encode(Unicode("&#x2295;", "XML"));;
 timesCharacter := Encode(Unicode("&#x00D7;", "XML"));;
-
-# stabilizedVector := LinearCombination(bg, stabilizedVectorLabel);;
 
 orbs := NilpotentOrbits(g);;
 for o in orbs do
