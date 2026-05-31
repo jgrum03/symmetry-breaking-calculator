@@ -21,6 +21,7 @@ elif algebra[1] = "C" then
 elif algebra[1] = "D" then
     rep := List([1..algebra[2]], i -> 0);;
     rep[2]:=1;;
+    # NOTE: I don't know if I did the correct thing for the exceptionals; I haven't tested them yet.
 elif algebra = ["E",6] then
     rep := [0,0,0,0,0,1];;
 elif algebra = ["E",7] then
@@ -52,7 +53,7 @@ StabilizerAlgebra := function(v, g)
 end;;
 
 AnalyzeStabilizer := function(v, g)
-    local stab, levi, ideals, ss, branch, repDimensions, mult, i, K, j;
+    local stab, levi, ideals, ss, branch, repDimensions, mult, i, K, j, type;
     stab := StabilizerAlgebra(v, g);;
 
     levi := LeviMalcevDecomposition(stab)[1];;
@@ -66,11 +67,12 @@ AnalyzeStabilizer := function(v, g)
         Print("Analysis of Representation of the Centralizer:\n\n==============================\n\n");
         for i in [1..Length(ss)] do
             K := ss[i];
-            Print(i, ":\nSubalgebra type: ", SemiSimpleType(K), "\n");
+            type := SemiSimpleType(K);
+            Print(i, ":\nSubalgebra type: ", type, "\n");
             # Print(K, "\n");
             if branchCatch(g, K, rep) then
                 branch := Branching(g, K, rep);
-                if SemiSimpleType(K) = "A1" then
+                if type = "A1" then
                     repDimensions := branch[1]+1;
                     mult := branch[2];
                     Print("su(2) Rep: ", repDimensions[1][1], "^",mult[1]);
@@ -103,3 +105,14 @@ for o in orbs do
     AnalyzeStabilizer(stabilizedVector, g);;
     Print("\n");;
 od;;
+
+FundamentalMatrix := function(x)
+    local V, bV, fundRep;
+    fundRep :=List([1..algebra[2]], i -> 0);
+    fundRep[1]:=1;
+    V := HighestWeightModule(g, fundRep);
+    bV := Basis(V);
+
+    # Usual column convention: column j is x acting on basis vector j
+    return TransposedMat(List(bV, v -> Coefficients(bV, x^v)));
+end;;
