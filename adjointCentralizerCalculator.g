@@ -33,30 +33,6 @@ elif algebra = ["E",8] then
     rep := [0,0,0,0,0,0,0,1];;
 fi;
 
-branchCatch := function(g, K, rep)
-local result;
-    BreakOnError := false;
-    result := CALL_WITH_CATCH(Branching, [ g, K, rep ])[1];;
-    BreakOnError := true;
-    return result;
-end;
-
-# Added code created by Claude to align the Cartan subalgebra of the centralizer with that of the original algebra.
-AlignCartanSubalgebra := function(g, K)
-    local hg, hK, typeStr, rk;
-    hg := CartanSubalgebra(g);;
-    hK := Intersection(hg, K);;
-    typeStr := SemiSimpleType(K);;
-    rk := Int(typeStr{[2..Length(typeStr)]});;   # strip leading type letter, parse rank
-    if Dimension(hK) <> rk then
-        Error("h_g \\cap K has dimension ", Dimension(hK),
-              " but rank(", typeStr, ") = ", rk,
-              " -- CSA misaligned, needs a different fix for this orbit.");
-    fi;
-    SetCartanSubalgebra(K, Subalgebra(K, BasisVectors(Basis(hK))));;
-    return K;
-end;;
-
 StabilizerAlgebra := function(v, g)
   local basis, m, sol, stab;
 
@@ -71,73 +47,208 @@ StabilizerAlgebra := function(v, g)
   return Subalgebra(g, stab);
 end;;
 
-AnalyzeStabilizer := function(v, g)
-    local stab, levi, ideals, ss, branch, repDimensions, mult, i, K, j, type, out, tempString;
+##########################################################################
+##  utilities
+##########################################################################
 
-    out := [String(v)];
-    stab := StabilizerAlgebra(v, g);;
+SafeCall := function(fn, args)
+    local r;
+    BreakOnError := false;
+    r := CALL_WITH_CATCH(fn, args);;
+    BreakOnError := true;
+    return r;
+end;;
 
-    levi := LeviMalcevDecomposition(stab)[1];;
+##  z(e) cap z(f) -- reductive by Jacobson-Morozov, no Levi needed
+ReductiveCentralizer := function(g, e, f)
+    local S;
+    S := Intersection(StabilizerAlgebra(e, g), StabilizerAlgebra(f, g));;
+    return Subalgebra(g, BasisVectors(Basis(S)));
+end;;
 
-    ideals := DirectSumDecomposition(levi);;
-    ss := Filtered(ideals, K -> not IsLieSolvable(K));;
-    if Length(ss) = 0 then
-        Print("The centralizer is trivial.\n\n==============================\n");
-        Add(out, "0",1);;
-        Add(out, "0");;
-    else
-        Print("The centralizer is ", SemiSimpleType(levi), ".\n");
-        Add(out,String(SemiSimpleType(levi)),1);;
-        Print("Analysis of Representation of the Centralizer:\n\n==============================\n\n");
-        for i in [1..Length(ss)] do
-            K := ss[i];
-            AlignCartanSubalgebra(g, K);;
-            type := SemiSimpleType(K);
-            Print(i, ":\nSubalgebra type: ", type, "\n");
-            Add(out, type);;
-            # Print(K, "\n");
-            Print(Branching(g, K, rep), "\n");
-            if branchCatch(g, K, rep) then
-                branch := Branching(g, K, rep);
-                if type = "A1" then
-                    repDimensions := branch[1]+1;
-                    mult := branch[2];
-                    Print("su(2) Rep: ", repDimensions[1][1], "^",mult[1]);
-                    tempString := Concatenation("\"",String(repDimensions[1][1]),"^",String(mult[1]));
-                    for j in [2..Length(repDimensions)] do
-                        Print(oplusCharacter, repDimensions[j][1], "^", mult[j]);
-                        tempString := Concatenation(tempString, "+", String(repDimensions[j][1]), "^", String(mult[j]));
-                    od;
-                    # Print("\n\n");
-                    # Print("Orbit partition: ", OrbitPartition(o), "\n");
-                    # Print("branch[1] (raw): ", branch[1], "\n");
-                    # Print("branch[2] (raw): ", branch[2], "\n\n");
-                else
-                    Print("Highest weights: ");
-                    Print(branch[2][1], timesCharacter, branch[1][1]);
-                    tempString := Concatenation("\"", String(branch[2][1]), "x", String(branch[1][1]));
-                    for j in [2..Length(branch[1])] do
-                        Print(oplusCharacter, branch[2][j], timesCharacter, branch[1][j]);
-                        tempString := Concatenation(tempString, "+", String(branch[2][j]), "x", String(branch[1][j]));
-                    od;
-                fi;
-                tempString := Concatenation(tempString, "\"");;
-                Add(out, tempString);;
+##  simple coroots of K, with a structural validity check on K's own CSA
+SimpleCoroots := function(K)
+    local R, h, nroots;
+    R := RootSystem(K);;
+    if R = fail then Error("K has no root system"); fi;
+    h := CanonicalGenerators(R)[3];;
+    nroots := 2*Length(PositiveRoots(R)) + Length(h);;
+    if nroots <> Dimension(K) then
+        Error("root system accounts for ", nroots, " dimensions but dim K = ",
+              Dimension(K), " -- K's Cartan subalgebra is not full rank");
+    fi;
+    return h;
+end;;
+
+##########################################################################
+##  weights of g under K, in Dynkin labels -- no projection required
+##########################################################################
+
+JointWeights := function(g, hlist)
+    local B, n, F, id, spaces, h, A, ns, new, S, lam, inter;
+    B  := Basis(g);;   n := Dimension(g);;   F := LeftActingDomain(g);;
+    id := IdentityMat(n, F);;
+    spaces := [ [ [], IdentityMat(n, F) ] ];      # [ partial label tuple, row basis ]
+    for h in hlist do
+        A   := AdjointMatrix(B, h);;
+        new := [];;
+        for lam in Set(Eigenvalues(F, A)) do
+            ns := NullspaceMat(A - lam*id);;
+            if Length(ns) > 0 then
+                for S in spaces do
+                    inter := SumIntersectionMat(S[2], ns)[2];;
+                    if Length(inter) > 0 then
+                        Add(new, [ Concatenation(S[1], [lam]), inter ]);
+                    fi;
+                od;
             fi;
-            Print("\n\n==============================\n\n");
         od;
-    fi;;
+        spaces := new;;
+    od;
+    return List(spaces, S -> [ S[1], Length(S[2]) ]);
+end;;
+
+##  peel irreducibles off the weight multiset, maximal-first
+PeelHighestWeights := function(K, wts)
+    local dom, lams, mult, dc, i, j, k, pos, m, chosen, isMax, result;
+
+    dom  := Filtered(wts, w -> ForAll(w[1], c -> c >= 0));;
+    lams := List(dom, w -> w[1]);;
+    mult := List(dom, w -> w[2]);;
+    dc   := List(lams, l -> DominantCharacter(K, l));;
+
+    result := [];;
+    while ForAny(mult, m -> m > 0) do
+        chosen := fail;;
+        for i in [1..Length(lams)] do
+            if mult[i] > 0 then
+                isMax := true;;
+                for j in [1..Length(lams)] do
+                    if j <> i and mult[j] > 0 and lams[i] in dc[j][1] then
+                        isMax := false;; break;
+                    fi;
+                od;
+                if isMax then chosen := i;; break; fi;
+            fi;
+        od;
+        if chosen = fail then Error("no maximal weight -- inconsistent data"); fi;
+
+        m := mult[chosen];;
+        Add(result, [ lams[chosen], m ]);
+        for k in [1..Length(dc[chosen][1])] do
+            pos := Position(lams, dc[chosen][1][k]);;
+            if pos <> fail then
+                mult[pos] := mult[pos] - m*dc[chosen][2][k];;
+                if mult[pos] < 0 then
+                    Error("negative multiplicity at ", lams[pos]);
+                fi;
+            fi;
+        od;
+    od;
+    return result;
+end;;
+
+DecomposeUnder := function(g, K)
+    local h, wts, bad, result, total;
+    h   := SimpleCoroots(K);;
+    wts := JointWeights(g, h);;
+
+    bad := Filtered(wts, w -> not ForAll(w[1], c -> IsInt(c)));;
+    if Length(bad) > 0 then
+        Error("non-integral weights: ", List(bad, w -> w[1]));
+    fi;
+    if Sum(wts, w -> w[2]) <> Dimension(g) then
+        Error("weights sum to ", Sum(wts, w -> w[2]), " not ", Dimension(g));
+    fi;
+
+    result := PeelHighestWeights(K, wts);;
+    total  := Sum(result, r -> r[2]*DimensionOfHighestWeightModule(K, r[1]));;
+    if total <> Dimension(g) then
+        Error("dimensions do not close: ", total, " vs ", Dimension(g));
+    fi;
+    SortBy(result, r -> -DimensionOfHighestWeightModule(K, r[1]));
+    return result;
+end;;
+
+##########################################################################
+##  per-orbit analysis -- CSV columns unchanged
+##########################################################################
+
+AnalyzeStabilizer := function(e, f, g)
+    local L, Lss, ideals, ss, i, j, K, type, dec, ok, out, tempString;
+
+    out := [String(e)];;
+    L   := ReductiveCentralizer(g, e, f);;
+    ideals := DirectSumDecomposition(L);;
+    ss  := Filtered(ideals, K -> not IsLieSolvable(K));;
+
+    if Length(ss) = 0 then
+        Print("The centralizer is toral or trivial (dim ", Dimension(L), ").\n");
+        Print("\n==============================\n");
+        Add(out, "0", 1);;  Add(out, "0");;
+        return out;
+    fi;
+
+    Lss := LieDerivedSubalgebra(L);;
+    Print("The centralizer is ", SemiSimpleType(Lss),
+          " plus ", Dimension(L) - Dimension(Lss), "-dim center.\n");
+    Add(out, String(SemiSimpleType(Lss)), 1);;
+    Print("Analysis of Representation of the Centralizer:\n\n",
+          "==============================\n\n");
+
+    for i in [1..Length(ss)] do
+        K    := ss[i];;                       # untouched: valid CSA already
+        type := SemiSimpleType(K);;
+        Print(i, ":\nSubalgebra type: ", type, "\n");
+        Add(out, type);;
+
+        ok := SafeCall(DecomposeUnder, [g, K]);;
+        if ok[1] = false then
+            Print("Decomposition failed for this subalgebra.\n");
+            Add(out, "\"DECOMPOSITION_FAILED\"");;
+        else
+            dec := ok[2];;
+            tempString := "\"";
+            if type = "A1" then
+                Print("su(2) Rep: ");
+                for j in [1..Length(dec)] do
+                    if j > 1 then
+                        Print(oplusCharacter);
+                        tempString := Concatenation(tempString, "+");
+                    fi;
+                    Print(dec[j][1][1]+1, "^", dec[j][2]);
+                    tempString := Concatenation(tempString,
+                        String(dec[j][1][1]+1), "^", String(dec[j][2]));
+                od;
+            else
+                Print("Highest weights: ");
+                for j in [1..Length(dec)] do
+                    if j > 1 then
+                        Print(oplusCharacter);
+                        tempString := Concatenation(tempString, "+");
+                    fi;
+                    Print(dec[j][2], timesCharacter, dec[j][1]);
+                    tempString := Concatenation(tempString,
+                        String(dec[j][2]), "x", String(dec[j][1]));
+                od;
+            fi;
+            Add(out, Concatenation(tempString, "\""));;
+        fi;
+        Print("\n\n==============================\n\n");
+    od;
     return out;
 end;;
 
-# SAVING A FILE:
+##########################################################################
+##  main loop
+##########################################################################
+
 PrintTo(filename, "Unbroken Algebra,Stabilized Vector,Ideal,Rep,Repeat\n");;
 orbs := NilpotentOrbits(g);;
 for o in orbs do
-    stabilizedVector := SL2Triple(o)[3];;
-
-    Print("Stabilizer of ", stabilizedVector, ":\n");;
-    temp := AnalyzeStabilizer(stabilizedVector, g);;
+    triple := SL2Triple(o);;                  # [ f, h, e ]
+    Print("Stabilizer of ", triple[3], ":\n");;
+    temp := AnalyzeStabilizer(triple[3], triple[1], g);;
     AppendTo(filename, JoinStringsWithSeparator(temp, ","), "\n");;
     Print("\n");;
 od;;
